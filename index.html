@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Parking Management System</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <!-- Navigation -->
+    <nav class="bg-blue-600 text-white p-4">
+        <div class="container mx-auto flex justify-between items-center">
+            <h1 class="text-2xl font-bold">SmartPark</h1>
+            <div id="userSection" class="hidden">
+                <span id="userEmail" class="mr-4"></span>
+                <button onclick="logout()" class="bg-red-500 px-4 py-2 rounded">Logout</button>
+            </div>
+            <div id="authSection">
+                <button onclick="showLoginModal()" class="bg-white text-blue-600 px-4 py-2 rounded mr-2">Login</button>
+                <button onclick="showSignupModal()" class="bg-green-500 px-4 py-2 rounded">Sign Up</button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="container mx-auto p-4">
+        <!-- Parking Slots Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+            <!-- Parking slot cards will be generated here -->
+        </div>
+
+        <!-- Booking Form -->
+        <div id="bookingForm" class="hidden bg-white p-6 rounded-lg shadow-lg max-w-md mx-auto">
+            <h2 class="text-2xl font-bold mb-4">Book Parking Slot</h2>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-gray-700">Selected Slot</label>
+                    <input type="text" id="selectedSlot" class="w-full p-2 border rounded" readonly>
+                </div>
+                <div>
+                    <label class="block text-gray-700">Duration (hours)</label>
+                    <input type="number" id="duration" class="w-full p-2 border rounded" min="1" max="24">
+                </div>
+                <div>
+                    <label class="block text-gray-700">Payment Method</label>
+                    <select id="paymentMethod" class="w-full p-2 border rounded">
+                        <option value="upi">UPI</option>
+                        <option value="card">Credit/Debit Card</option>
+                        <option value="wallet">Digital Wallet</option>
+                    </select>
+                </div>
+                <button onclick="processBooking()" class="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700">
+                    Confirm Booking
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Auth Modals -->
+    <div id="loginModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+        <div class="bg-white p-6 rounded-lg w-96">
+            <h2 class="text-2xl font-bold mb-4">Login</h2>
+            <input type="email" id="loginEmail" placeholder="Email" class="w-full p-2 border rounded mb-4">
+            <input type="password" id="loginPassword" placeholder="Password" class="w-full p-2 border rounded mb-4">
+            <button onclick="login()" class="w-full bg-blue-600 text-white py-2 rounded mb-2">Login</button>
+            <button onclick="closeLoginModal()" class="w-full border border-gray-300 py-2 rounded">Cancel</button>
+        </div>
+    </div>
+
+    <div id="signupModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+        <div class="bg-white p-6 rounded-lg w-96">
+            <h2 class="text-2xl font-bold mb-4">Sign Up</h2>
+            <input type="email" id="signupEmail" placeholder="Email" class="w-full p-2 border rounded mb-4">
+            <input type="password" id="signupPassword" placeholder="Password" class="w-full p-2 border rounded mb-4">
+            <button onclick="signup()" class="w-full bg-green-500 text-white py-2 rounded mb-2">Sign Up</button>
+            <button onclick="closeSignupModal()" class="w-full border border-gray-300 py-2 rounded">Cancel</button>
+        </div>
+    </div>
+
+    <script>
+        // Simulated database
+        let parkingSlots = [];
+        let currentUser = null;
+        let bookings = [];
+
+        // Initialize parking slots
+        function initializeParkingSlots() {
+            parkingSlots = Array(12).fill().map((_, index) => ({
+                id: index + 1,
+                status: 'available', // available, occupied, reserved
+                price: 50 // price per hour
+            }));
+            renderParkingSlots();
+        }
+
+        // Render parking slots
+        function renderParkingSlots() {
+            const grid = document.querySelector('.grid');
+            grid.innerHTML = '';
+            
+            parkingSlots.forEach(slot => {
+                const statusColor = {
+                    'available': 'bg-green-500',
+                    'occupied': 'bg-red-500',
+                    'reserved': 'bg-yellow-500'
+                }[slot.status];
+
+                const card = `
+                    <div class="bg-white rounded-lg shadow-lg p-4">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-xl font-bold">Slot ${slot.id}</h3>
+                            <span class="w-4 h-4 rounded-full ${statusColor}"></span>
+                        </div>
+                        <p class="text-gray-600 mb-4">₹${slot.price}/hour</p>
+                        ${slot.status === 'available' ? 
+                            `<button onclick="selectSlot(${slot.id})" 
+                             class="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700">
+                             Book Now
+                             </button>` : 
+                            `<button disabled class="w-full bg-gray-300 text-gray-600 py-2 rounded">
+                             ${slot.status.charAt(0).toUpperCase() + slot.status.slice(1)}
+                             </button>`
+                        }
+                    </div>
+                `;
+                grid.innerHTML += card;
+            });
+        }
+
+        // Auth functions
+        function showLoginModal() {
+            document.getElementById('loginModal').classList.remove('hidden');
+        }
+
+        function closeLoginModal() {
+            document.getElementById('loginModal').classList.add('hidden');
+        }
+
+        function showSignupModal() {
+            document.getElementById('signupModal').classList.remove('hidden');
+        }
+
+        function closeSignupModal() {
+            document.getElementById('signupModal').classList.add('hidden');
+        }
+
+        function login() {
+            const email = document.getElementById('loginEmail').value;
+            const password = document.getElementById('loginPassword').value;
+            
+            // Simulate authentication
+            currentUser = { email };
+            document.getElementById('userEmail').textContent = email;
+            document.getElementById('userSection').classList.remove('hidden');
+            document.getElementById('authSection').classList.add('hidden');
+            closeLoginModal();
+
+            Swal.fire({
+                icon: 'success',
+                title: 'Logged in successfully!',
+                showConfirmButton: false,
+                timer: 1500
+            });
+        }
+
+        function signup() {
+            const email = document.getElementById('signupEmail').value;
+            const password = document.getElementById('signupPassword').value;
+            
+            // Simulate registration
+            currentUser = { email };
+            document.getElementById('userEmail').textContent = email;
+            document.getElementById('userSection').classList.remove('hidden');
+            document.getElementById('authSection').classList.add('hidden');
+            closeSignupModal();
+
+            Swal.fire({
+                icon: 'success',
+                title: 'Account created successfully!',
+                showConfirmButton: false,
+                timer: 1500
+            });
+        }
+
+        function logout() {
+            currentUser = null;
+            document.getElementById('userSection').classList.add('hidden');
+            document.getElementById('authSection').classList.remove('hidden');
+            
+            Swal.fire({
+                icon: 'success',
+                title: 'Logged out successfully!',
+                showConfirmButton: false,
+                timer: 1500
+            });
+        }
+
+        // Booking functions
+        function selectSlot(slotId) {
+            if (!currentUser) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Please login first',
+                    text: 'You need to be logged in to book a parking slot'
+                });
+                return;
+            }
+
+            document.getElementById('selectedSlot').value = `Slot ${slotId}`;
+            document.getElementById('bookingForm').classList.remove('hidden');
+        }
+
+        function processBooking() {
+            const slotNumber = parseInt(document.getElementById('selectedSlot').value.split(' ')[1]);
+            const duration = parseInt(document.getElementById('duration').value);
+            const paymentMethod = document.getElementById('paymentMethod').value;
+
+            if (!duration || duration < 1) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Invalid duration',
+                    text: 'Please enter a valid duration'
+                });
+                return;
+            }
+
+            // Simulate payment processing
+            Swal.fire({
+                title: 'Processing payment...',
+                html: 'Please wait...',
+                allowOutsideClick: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+
+            setTimeout(() => {
+                // Update slot status
+                const slotIndex = slotNumber - 1;
+                parkingSlots[slotIndex].status = 'occupied';
+                
+                // Create booking record
+                const booking = {
+                    id: bookings.length + 1,
+                    slotNumber,
+                    duration,
+                    paymentMethod,
+                    amount: parkingSlots[slotIndex].price * duration,
+                    timestamp: new Date()
+                };
+                bookings.push(booking);
+
+                // Auto-release slot after duration
+                setTimeout(() => {
+                    parkingSlots[slotIndex].status = 'available';
+                    renderParkingSlots();
+                }, duration * 3600000); // Convert hours to milliseconds
+
+                renderParkingSlots();
+                document.getElementById('bookingForm').classList.add('hidden');
+
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Booking Successful!',
+                    html: `
+                        <p>Slot: ${slotNumber}</p>
+                        <p>Duration: ${duration} hours</p>
+                        <p>Amount: ₹${booking.amount}</p>
+                        <p>Payment Method: ${paymentMethod}</p>
+                    `
+                });
+            }, 2000);
+        }
+
+        // Initialize the application
+        initializeParkingSlots();
+    </script>
+<script>document.body.addEventListener('wheel', e => { if (!e.ctrlKey) return; e.preventDefault(); return }, { passive: false })</script>
+	</body>
+</html>
